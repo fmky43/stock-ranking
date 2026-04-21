@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>売買代金ランキング</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); padding: 24px 32px; border-bottom: 1px solid #1e40af44; display: flex; align-items: center; gap: 16px; }
+    header .logo { font-size: 28px; font-weight: 800; color: #60a5fa; }
+    header .subtitle { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+    header .updated { margin-left: auto; font-size: 12px; color: #64748b; }
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+    .controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+    .controls label { font-size: 13px; color: #94a3b8; }
+    .controls select, .controls input { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; }
+    .controls select:focus, .controls input:focus { border-color: #60a5fa; }
+    .controls input[type="text"] { width: 200px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #0f172a; padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none; white-space: nowrap; }
+    thead th:hover { color: #94a3b8; }
+    thead th.sorted { color: #60a5fa; }
+    thead th .sort-icon { margin-left: 4px; opacity: 0.5; }
+    thead th.sorted .sort-icon { opacity: 1; }
+    tbody tr { border-top: 1px solid #334155; transition: background 0.15s; }
+    tbody tr:hover { background: #263347; }
+    td { padding: 14px 16px; font-size: 14px; }
+    .rank { font-weight: 700; color: #94a3b8; font-size: 13px; }
+    .rank.top-3 { color: #f59e0b; }
+    .ticker { font-weight: 700; color: #60a5fa; font-family: monospace; font-size: 15px; }
+    .company { color: #cbd5e1; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .price { font-weight: 600; color: #e2e8f0; text-align: right; }
+    .change { font-weight: 600; text-align: right; white-space: nowrap; }
+    .change.up { color: #34d399; }
+    .change.down { color: #f87171; }
+    .change.flat { color: #94a3b8; }
+    .volume { text-align: right; color: #94a3b8; font-size: 13px; }
+    .bar-cell { width: 120px; }
+    .bar-wrap { background: #0f172a; border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .sector-badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .sector-it { background: #1e3a5f; color: #60a5fa; }
+    .sector-finance { background: #1c3a27; color: #34d399; }
+    .sector-mfg { background: #3b1f1f; color: #f87171; }
+    .sector-retail { background: #3b2d1f; color: #fb923c; }
+    .sector-other { background: #2d1f3b; color: #c084fc; }
+    .pagination { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .pagination button { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .pagination button:hover { background: #263347; color: #e2e8f0; }
+    .pagination button.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    footer { text-align: center; padding: 32px; color: #334155; font-size: 12px; }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">📊 売買代金ランキング</div>
+    <div class="subtitle">Stock Trading Value Ranking — Japan Market</div>
+  </div>
+  <div class="updated" id="updatedAt"></div>
+</header>
+<div class="container">
+  <div class="controls">
+    <label>市場：
+      <select id="marketFilter" onchange="render()">
+        <option value="">すべて</option>
+        <option value="プライム">プライム</option>
+        <option value="スタンダード">スタンダード</option>
+        <option value="グロース">グロース</option>
+      </select>
+    </label>
+    <label>セクター：
+      <select id="sectorFilter" onchange="render()">
+        <option value="">すべて</option>
+        <option value="IT">IT・通信</option>
+        <option value="金融">金融</option>
+        <option value="製造">製造業</option>
+        <option value="小売">小売・サービス</option>
+        <option value="その他">その他</option>
+      </select>
+    </label>
+    <input type="text" id="searchBox" placeholder="銘柄名・コードで検索…" oninput="render()" />
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('rank')" id="th-rank"># <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('ticker')" id="th-ticker">コード <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('company')" id="th-company">銘柄名 <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('sector')" id="th-sector">セクター <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('price')" id="th-price">株価 (円) <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('change')" id="th-change">前日比 <span class="sort-icon">↕</span></th>
+          <th onclick="sortBy('volume')" id="th-volume">売買代金 (億円) <span class="sort-icon">↕</span></th>
+          <th class="bar-cell">比率</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+<footer>※ このページはサンプルデータを表示しています。実際の売買代金データはYahoo Finance等から取得してください。</footer>
+<script>
+  const STOCKS = [
+    { rank:1,  ticker:'7203', company:'トヨタ自動車',         sector:'製造', market:'プライム', price:2980,  change:1.2,  volume:2850 },
+    { rank:2,  ticker:'6758', company:'ソニーグループ',        sector:'IT',   market:'プライム', price:13200, change:-0.8, volume:2410 },
+    { rank:3,  ticker:'9984', company:'ソフトバンクグループ',  sector:'IT',   market:'プライム', price:8640,  change:2.1,  volume:2210 },
+    { rank:4,  ticker:'6861', company:'キーエンス',            sector:'製造', market:'プライム', price:65800, change:-0.3, volume:1980 },
+    { rank:5,  ticker:'8306', company:'三菱UFJフィナンシャル', sector:'金融', market:'プライム', price:1540,  change:0.5,  volume:1870 },
+    { rank:6,  ticker:'4063', company:'信越化学工業',          sector:'製造', market:'プライム', price:5820,  change:1.8,  volume:1650 },
+    { rank:7,  ticker:'9432', company:'日本電信電話',          sector:'IT',   market:'プライム', price:179,   change:-0.6, volume:1530 },
+    { rank:8,  ticker:'6098', company:'リクルートHD',          sector:'小売', market:'プライム', price:8120,  change:0.9,  volume:1420 },
+    { rank:9,  ticker:'8035', company:'東京エレクトロン',      sector:'製造', market:'プライム', price:29400, change:3.2,  volume:1380 },
+    { rank:10, ticker:'7974', company:'任天堂',                sector:'IT',   market:'プライム', price:7840,  change:-1.1, volume:1250 },
+    { rank:11, ticker:'4502', company:'武田薬品工業',          sector:'その他',market:'プライム', price:3980,  change:0.2,  volume:1180 },
+    { rank:12, ticker:'8316', company:'三井住友フィナンシャル',sector:'金融', market:'プライム', price:9260,  change:0.7,  volume:1100 },
+    { rank:13, ticker:'6367', company:'ダイキン工業',          sector:'製造', market:'プライム', price:24500, change:-0.4, volume:1050 },
+    { rank:14, ticker:'3382', company:'セブン＆アイHD',        sector:'小売', market:'プライム', price:2640,  change:-0.9, volume:980  },
+    { rank:15, ticker:'4519', company:'中外製薬',              sector:'その他',market:'プライム', price:6540,  change:1.4,  volume:920  },
+    { rank:16, ticker:'6645', company:'オムロン',              sector:'製造', market:'プライム', price:4870,  change:0.3,  volume:870  },
+    { rank:17, ticker:'2914', company:'日本たばこ産業',        sector:'その他',market:'プライム', price:4230,  change:0.1,  volume:840  },
+    { rank:18, ticker:'9433', company:'KDDI',                  sector:'IT',   market:'プライム', price:4580,  change:-0.2, volume:810  },
+    { rank:19, ticker:'7267', company:'本田技研工業',          sector:'製造', market:'プライム', price:1790,  change:0.6,  volume:780  },
+    { rank:20, ticker:'8001', company:'伊藤忠商事',            sector:'その他',market:'プライム', price:7640,  change:1.0,  volume:750  },
+  ];
+  const SECTOR_CLASS = { IT:'sector-it', 金融:'sector-finance', 製造:'sector-mfg', 小売:'sector-retail', その他:'sector-other' };
+  let sortKey='rank', sortAsc=true, currentPage=1;
+  const PAGE_SIZE=10;
+  function sortBy(key){if(sortKey===key)sortAsc=!sortAsc;else{sortKey=key;sortAsc=key==='rank';}currentPage=1;render();}
+  function filtered(){const mkt=document.getElementById('marketFilter').value;const sec=document.getElementById('sectorFilter').value;const q=document.getElementById('searchBox').value.trim().toLowerCase();return STOCKS.filter(s=>(!mkt||s.market===mkt)&&(!sec||s.sector===sec)&&(!q||s.ticker.includes(q)||s.company.toLowerCase().includes(q)));}
+  function sorted(arr){return[...arr].sort((a,b)=>{let av=a[sortKey],bv=b[sortKey];if(typeof av==='string')return sortAsc?av.localeCompare(bv):bv.localeCompare(av);return sortAsc?av-bv:bv-av;});}
+  function render(){const data=sorted(filtered());const maxVol=Math.max(...data.map(s=>s.volume));const pages=Math.ceil(data.length/PAGE_SIZE);if(currentPage>pages)currentPage=1;const slice=data.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);document.getElementById('tbody').innerHTML=slice.map(s=>{const cl=s.change>0?'up':s.change<0?'down':'flat';const sign=s.change>0?'+':'';const rankCl=s.rank<=3?'rank top-3':'rank';const sc=SECTOR_CLASS[s.sector]||'sector-other';const pct=Math.round((s.volume/maxVol)*100);return '<tr><td class="'+rankCl+'">'+s.rank+'</td><td class="ticker">'+s.ticker+'</td><td class="company">'+s.company+'</td><td><span class="sector-badge '+sc+'">'+s.sector+'</span></td><td class="price">'+s.price.toLocaleString()+'</td><td class="change '+cl+'">'+sign+s.change+'%</td><td class="volume">'+s.volume.toLocaleString()+'</td><td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%"></div></div></td></tr>';}).join('');document.querySelectorAll('thead th[id]').forEach(th=>th.classList.remove('sorted'));const el=document.getElementById('th-'+sortKey);if(el){el.classList.add('sorted');el.querySelector('.sort-icon').textContent=sortAsc?'↑':'↓';}const pg=document.getElementById('pagination');if(pages<=1){pg.innerHTML='';return;}pg.innerHTML=Array.from({length:pages},(_,i)=>'<button class="'+(i+1===currentPage?'active':'')+'" onclick="goPage('+(i+1)+')">'+(i+1)+'</button>').join('');}
+  function goPage(n){currentPage=n;render();}
+  document.getElementById('updatedAt').textContent='更新: '+new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  render();
+</script>
+</body>
+</html>
